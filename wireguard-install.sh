@@ -146,29 +146,22 @@ function installQuestions() {
 		read -rp "WireGuard interface name: " -e -i wg0 SERVER_WG_NIC
 	done
 
-	until [[ ${SERVER_WG_IPV4} =~ ^([0-9]{1,3}\.){3} ]]; do
-		read -rp "Server WireGuard IPv4: " -e -i 10.66.66.1 SERVER_WG_IPV4
-	done
+    until [[ ${SERVER_WG_IPV4_MASK} =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}/[0-9]{1,2}$ ]]; do
+        read -rp "Server WireGuard IPv4 with subnet mask: " -e -i 192.168.200.17/28 SERVER_WG_IPV4_MASK
+        # Extract IP address part
+        SERVER_WG_IPV4=$(echo "${SERVER_WG_IPV4_MASK}" | cut -d'/' -f1)
+    done
 
-	until [[ ${SERVER_WG_IPV6} =~ ^([a-f0-9]{1,4}:){3,4}: ]]; do
-		read -rp "Server WireGuard IPv6: " -e -i fd42:42:42::1 SERVER_WG_IPV6
-	done
+	until [[ ${SERVER_WG_IPV6_MASK} =~ ^([a-fA-F0-9:]+)\/([0-9]{1,3})$ ]]; do
+        read -rp "Server WireGuard IPv6 with subnet mask: " -e -i fd42:42:42:42::1/64 SERVER_WG_IPV6_MASK
+        # Extract IP address part
+        SERVER_WG_IPV6=$(echo "${SERVER_WG_IPV6_MASK}" | cut -d'/' -f1)
+    done
 
 	# Generate random number within private ports range
 	RANDOM_PORT=$(shuf -i49152-65535 -n1)
 	until [[ ${SERVER_PORT} =~ ^[0-9]+$ ]] && [ "${SERVER_PORT}" -ge 1 ] && [ "${SERVER_PORT}" -le 65535 ]; do
 		read -rp "Server WireGuard port [1-65535]: " -e -i "${RANDOM_PORT}" SERVER_PORT
-	done
-
-	# Adguard DNS by default
-	until [[ ${CLIENT_DNS_1} =~ ^((25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$ ]]; do
-		read -rp "First DNS resolver to use for the clients: " -e -i 1.1.1.1 CLIENT_DNS_1
-	done
-	until [[ ${CLIENT_DNS_2} =~ ^((25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$ ]]; do
-		read -rp "Second DNS resolver to use for the clients (optional): " -e -i 1.0.0.1 CLIENT_DNS_2
-		if [[ ${CLIENT_DNS_2} == "" ]]; then
-			CLIENT_DNS_2="${CLIENT_DNS_1}"
-		fi
 	done
 
 	until [[ ${ALLOWED_IPS} =~ ^.+$ ]]; do
@@ -248,13 +241,11 @@ SERVER_WG_IPV6=${SERVER_WG_IPV6}
 SERVER_PORT=${SERVER_PORT}
 SERVER_PRIV_KEY=${SERVER_PRIV_KEY}
 SERVER_PUB_KEY=${SERVER_PUB_KEY}
-CLIENT_DNS_1=${CLIENT_DNS_1}
-CLIENT_DNS_2=${CLIENT_DNS_2}
 ALLOWED_IPS=${ALLOWED_IPS}" >/etc/wireguard/params
 
 	# Add server interface
 	echo "[Interface]
-Address = ${SERVER_WG_IPV4}/24,${SERVER_WG_IPV6}/64
+Address = ${SERVER_WG_IPV4_MASK},${SERVER_WG_IPV6_MASK}
 ListenPort = ${SERVER_PORT}
 PrivateKey = ${SERVER_PRIV_KEY}" >"/etc/wireguard/${SERVER_WG_NIC}.conf"
 
@@ -401,7 +392,6 @@ function newClient() {
 	echo "[Interface]
 PrivateKey = ${CLIENT_PRIV_KEY}
 Address = ${CLIENT_WG_IPV4}/32,${CLIENT_WG_IPV6}/128
-DNS = ${CLIENT_DNS_1},${CLIENT_DNS_2}
 
 [Peer]
 PublicKey = ${SERVER_PUB_KEY}
